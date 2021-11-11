@@ -1,0 +1,5 @@
+flask_script==1.0.0 
+requests
+names
+clint
+random_username
