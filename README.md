@@ -30,3 +30,5 @@
 `python3 app.py runserver --host=<ip> --port=<port> `
 
 
+<h3> Run unittests </h3>
+`python3 Unit_testing.py `
