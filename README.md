@@ -1,9 +1,6 @@
 # BackEnd_API
-A Flask back end  API for managing users 
 
-
-
-<p> A flask back end API used for managing users accounts </p> 
+<p> A Flask back end API used for managing users accounts </p> 
 
 
 
