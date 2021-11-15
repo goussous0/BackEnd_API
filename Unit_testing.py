@@ -1,5 +1,5 @@
 import unittest
-from random import sample, randrange
+from random import sample, randrange, choice
 import names
 import json
 import requests
@@ -56,8 +56,8 @@ class Flask_Test(unittest.TestCase):
 
     def get_token(self):
 
-        user_creds = {"username": random.choice(user_lst),
-                      "password": random.choice(pass_lst)}
+        user_creds = {"username": choice(user_lst),
+                      "password": choice(pass_lst)}
 
         heads = {'content-type': 'application/json'}
 
