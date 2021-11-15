@@ -1,5 +1,5 @@
 import unittest
-import random
+from random import sample, randrange
 import names
 import json
 import requests
@@ -25,8 +25,7 @@ class Flask_Test(unittest.TestCase):
     # creating user
     def create_user(self):
         user = str(generate_username()[0])
-        passwd = ''.join([str(random.choice(char_lst))
-                          for i in range(random.randrange(0, 10))])
+        passwd = ''.join(sample(char_lst, randrange(1, 20)))
 
         new_user = {"username": user,
                     "first_name": f"{names.get_first_name()}",
