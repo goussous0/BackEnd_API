@@ -4,4 +4,4 @@ names
 clint
 random_username
 pyjwt
-sql_alchemy
+sqlalchemy
