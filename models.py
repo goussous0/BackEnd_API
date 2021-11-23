@@ -19,4 +19,9 @@ class User(db.Model):
 
     last_login = db.Column(db.DateTime())
 
-    is_superuser = db.Column(db.Boolean(), default=False)
+    is_super = db.Column(db.Boolean(), default=False)
+
+    def is_online(self):
+        if (datetime.now() - self.last_login).seconds > 60:
+            self.is_active = False
+            db.session.commit()
