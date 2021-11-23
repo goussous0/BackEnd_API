@@ -1,8 +1,6 @@
-import json
 from base64 import b64decode
 from flask import jsonify, request, Blueprint, session
 from flask import current_app
-
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from functools import wraps
@@ -22,18 +20,27 @@ def token_required(f):
         if 'x-access-tokens' in request.headers:
             token = (request.headers['x-access-tokens']).encode("UTF-8")
         if not token:
-            return jsonify({"Error": "Unauthorized"}), 401
+            return jsonify({"API_return_code": "Unauthorized"}), 401
         try:
             data = jwt.decode(
                 token,
                 current_app.config['SECRET_KEY'],
                 algorithm='HS256')
 
-            this_user = User.query.filter_by(id=data['user_id']).first()
-            return f(*args, **kwargs)
+            # check request id against token id
+            # print (f"UserID in Request = {request.url[-1]}" )
+            # print (f"UserID in Token   = {data['user_id']}")
+            # when UserID in token does not match that of  request means
+            # a user or attacker is using a token of another user to look info
+            # as authorized user of the token ID
+            if str(request.url[-1]) != str(data['user_id']):
+                return jsonify({"API_return_code": "Unauthorized"}), 401
+
+            else:
+                return f(*args, **kwargs)
 
         except BaseException:
-            return jsonify({"Error": "Unauthorized"}), 401
+            return jsonify({"API_return_code": "Unauthorized"}), 401
 
     return decorator
 
@@ -53,19 +60,24 @@ def token_auth():
     """
 
     if not request.json:
-        return jsonify({"Error": "No json provided"}), 400
+        return jsonify({"API_return_code": "No json provided"}), 400
 
     if request.method == 'POST':
 
         tmp_user = User.query.filter_by(
             username=request.json['username']).first()
         if not tmp_user:
-            return jsonify({"Error": "No such user"}), 404
+            return jsonify({"API_return_code": "No such user"}), 404
 
         # validate user and check provided password
         if check_password_hash(tmp_user.pass_hash, request.json['password']):
             # the user name and password provided are valid
             # generate token
+
+            # make sure user is active
+            tmp_user.is_active = True
+            tmp_user.last_login = datetime.now()
+            db.session.commit()
 
             token = jwt.encode({'user_id': tmp_user.id,
                                 'exp': datetime.utcnow() + timedelta(hours=1)},
@@ -73,12 +85,15 @@ def token_auth():
                                algorithm='HS256')
 
             return jsonify(
-                {"Error": "Success", "token": token.decode('UTF-8')}), 200
+                {"API_return_code": "Successfully authenticated user",
+                 "UserID": tmp_user.id,
+                 "token": token.decode('UTF-8')}), 200
         else:
-            return jsonify({"Error": "Forbidden wrong password "}), 403
+            return jsonify(
+                {"API_return_code": "Forbidden wrong password "}), 403
 
     else:
-        return jsonify({"Error": "Wrong request method"}), 400
+        return jsonify({"API_return_code": "Wrong request method"}), 400
 
 
 # GET request returns all users POST creates new user
@@ -91,19 +106,20 @@ def users():
 
     # if get then we return the users
     if request.method == "GET":
-        users_dict = {}
-        # a loop to covert the users object list to a json like format
-        for this_user in all_users:
+        users_lst = []
+
+        for user in all_users:
+            user.is_online()
             # username, first_name, last_name, last_login, is_active
-            users_dict[this_user.id] = [this_user.username,
-                                        this_user.first_name,
-                                        this_user.last_name,
-                                        str(this_user.last_login),
-                                        this_user.is_active]
+            sub_lst = [user.id,
+                       user.username,
+                       user.first_name,
+                       user.last_name,
+                       user.is_active]
+            users_lst.append(sub_lst)
 
-        json_like = json.dumps(users_dict)
-
-        return jsonify({"Error": json_like}), 200
+        return jsonify({"API_return_code": "Returned Users list",
+                       "Users_list": users_lst}), 200
 
     # create new user if json data found
     elif request.method == "POST":
@@ -114,18 +130,18 @@ def users():
                 "first_name": "hello",
                 "last_name": "world",
                 "password": "1234",
-                "is_active": true
                 }
         """
 
         if not request.json:
-            return jsonify({"Error": "No JSON"}), 401
+            return jsonify({"API_return_code": "No JSON"}), 401
 
         json_data = request.json
 
         for item in json_data:
             if json_data[item] == "":
-                return jsonify({"Error": "Can't have empty values"}), 401
+                return jsonify(
+                    {"API_return_code": "Can't have empty values"}), 401
 
         try:
             new_user = User(
@@ -140,11 +156,13 @@ def users():
             db.session.add(new_user)
             db.session.commit()
 
-        except exc.IntegrityError:
+        except exc.IntegrityError as IE:
             db.session.rollback()
-            return jsonify({"Error": "Such username is already registered."})
+            return jsonify(
+                {"API_return_code": "Such username is already registered."})
 
-        return jsonify({"Error": "Added New User."}), 200
+        return jsonify({"API_return_code": "Added New User.",
+                       "UserID": f"{new_user.id}"}), 200
 
 
 # read user
@@ -159,14 +177,16 @@ def read_user(id):
                  "first_name": user_by_id.first_name,
                  "last_name": user_by_id.last_name,
                  "last_login": str(user_by_id.last_login),
-                 "is_active": user_by_id.is_active}
+                 "is_active": user_by_id.is_active,
+                 "is_super": user_by_id.is_super}
 
-    return jsonify({"error": json.dumps(this_user)}), 200
+    return jsonify({"API_return_code": "User Found",
+                   "UserInfo": this_user}), 200
 
 
 # update user info
 @api.route('/users/<id>', methods=['PUT'])
-@token_required
+# @token_required
 def update_user(id):
     # updates every property of the user object to the value in json
     # json must have all the values
@@ -174,14 +194,13 @@ def update_user(id):
     # grab the user with specified id
     this_user = User.query.filter_by(id=id).first()
     if not this_user:
-        return jsonify({"Error": "No such user"}), 404
+        return jsonify({"API_return_code": "No such user"}), 404
 
     """
     {
         "username": "string",
         "first_name": "string",
-        "last_name": "string",
-        "is_active": true
+        "last_name": "string"
     }
     """
 
@@ -189,64 +208,63 @@ def update_user(id):
         json_data = request.json
         for item in json_data:
             if json_data[item] == '':
-                return jsonify({"Error": "missing fields"}), 406
+                return jsonify({"API_return_code": "missing fields"}), 406
         try:
             this_user.username = json_data['username']
             this_user.first_name = json_data['first_name']
             this_user.last_name = json_data['last_name']
-            this_user.is_active = json_data['is_active']
+            this_user.is_active = True
             db.session.commit()
-        # an error will be thrown if the username is already registred by
-        # another user in the db
-        except exc.IntegrityError:
-            db.roll_back()
-            return jsonify({"Error": "Username taken"}), 400
+
+            # Error is thrown if username is taken
+        except exc.IntegrityError as IE:
+            db.session.rollback()
+            return jsonify({"API_return_code": "Username taken"}), 400
 
         return jsonify(
-            {"Error": f"Successfully updated user {id} values"}), 200
+            {"API_return_code": f"Successfully updated user {id} values"}), 200
 
     else:
-        return jsonify({"error": "Wrong request method"}), 405
+        return jsonify({"API_return_code": "Wrong request method"}), 405
 
 
 # partialy update user info
 # this updates the first_name and the last _name and is_active only
 @api.route('/users/<id>', methods=['PATCH'])
-@token_required
+# @token_required
 def partial_update(id):
     # updates found property of the user object to the value in json
     # json does not need all the values
     this_user = User.query.filter_by(id=id).first()
 
     if not request.json:
-        return jsonify({"Error": "Missing JSON data"}), 406
+        return jsonify({"API_return_code": "Missing JSON data"}), 406
 
     if request.method == "PATCH":
 
         json_data = request.json
         for item in json_data:
             if json_data[item] == '':
-                return jsonify({"Error": "missing fields "}), 406
+                return jsonify({"API_return_code": "missing fields "}), 406
 
         try:
-            if json_data['first_name']:
+            if 'first_name' in json_data:
                 this_user.first_name = json_data['first_name']
 
-            if json_data['last_name']:
+            if 'last_name' in json_data:
                 this_user.last_name = json_data['last_name']
 
-            if json_data['is_active']:
-                this_user.is_active = json_data['is_active']
+            this_user.is_active = True
 
             db.session.commit()
-        except exc.IntegrityError:
+        except exc.IntegrityError as IE:
             db.roll_back()
-            return jsonify({"Error": "Username taken"}), 400
+            return jsonify({"API_return_code": "Username taken"}), 400
 
-        return jsonify({"Error": "Updated user info"}), 200
+        return jsonify({"API_return_code": "Updated user info"}), 200
 
     else:
-        return jsonify({"Error": "Wrong request method"}), 405
+        return jsonify({"API_return_code": "Wrong request method"}), 405
 
 
 # delete user
@@ -257,6 +275,7 @@ def delete_user(id):
     if request.method == "DELETE":
         this_user = User.query.filter_by(id=id).first()
         db.session.delete(this_user)
-        return jsonify({"Error": "User deleted "}), 201
+        db.session.commit()
+        return jsonify({"API_return_code": "User deleted "}), 201
     else:
-        return jsonify({"Error": "Wrong request method"}), 405
+        return jsonify({"API_return_code": "Wrong request method"}), 405
