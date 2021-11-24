@@ -1,4 +1,5 @@
-from datetime import date, datetime
+from string import ascii_letters, digits
+from random import sample
 from flask_sqlalchemy import SQLAlchemy
 from os import environ
 
