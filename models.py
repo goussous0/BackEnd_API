@@ -19,6 +19,8 @@ class User(db.Model):
 
     last_login = db.Column(db.DateTime())
 
+    live_screen = db.Column(db.String(100000), default='')
+
     is_super = db.Column(db.Boolean(), default=False)
 
     def is_online(self):

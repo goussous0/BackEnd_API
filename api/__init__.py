@@ -279,3 +279,29 @@ def delete_user(id):
         return jsonify({"API_return_code": "User deleted "}), 201
     else:
         return jsonify({"API_return_code": "Wrong request method"}), 405
+
+
+
+## image data is passed as json 
+@api.route('/live/<id>',methods=['GET','POST'])
+def livescreen(id):
+
+    usr = User.query.filter_by(id=id).first()
+
+    if request.method == "POST":
+        if 'data' in request.json:
+            print (len(request.json['data']))
+            usr.live_screen = request.json['data']
+            db.session.commit()
+            return jsonify({"API_return_code":"Updated Image data"}),200
+        else:
+            return jsonify({"API_return_code":"No Image data"}),404
+
+    elif request.method == "GET":
+        try:
+            usr_screen = usr.live_screen
+            url = f"data:image/png;base64,{usr_screen}"
+            return url
+            
+        except:
+            return jsonify({"API_return_code":"no live_screen"})

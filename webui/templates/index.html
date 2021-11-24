@@ -1,0 +1,45 @@
+
+
+
+</html>
+
+<body>
+
+
+<img id="image_id" src="">
+
+
+
+<script type="text/javascript">
+	function httpGet(theUrl)
+	{
+    	var xmlHttp = new XMLHttpRequest();
+    	xmlHttp.open( "GET", theUrl, false ); // false for synchronous request
+    	xmlHttp.send( null );
+    	return xmlHttp.responseText;
+	}
+
+	/*
+	setInterval(function() {
+		var image = document.getElementById('image_id');
+		const URL = "{{url}}";
+		image_data = httpGet(URL);
+		document.write(image_data);
+		image.src = image_data;
+
+	}, 2000);
+	*/
+	setInterval(function() {
+		var image = document.getElementById('image_id');
+		const URL = "{{url}}";
+		image_data = httpGet(URL);	
+		image.src = image_data;
+	},3000);
+	
+
+
+</script>
+
+
+</body>
+</html>
